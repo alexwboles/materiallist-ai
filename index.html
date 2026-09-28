@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaterialList AI — job description to store-ready materials list</title>
+<meta name="description" content="Free materials takeoff for contractors: describe the job in plain English, get a store-ready checklist with quantities, waste factors, and cost estimates. 100% local, no account needed.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🧰 MaterialList <span class="ai">AI</span></div>
+  <div class="tagline">Describe the job. Get the shopping list. Nothing forgotten.</div>
+</header>
+
+<main>
+  <!-- Input -->
+  <section class="card" id="inputSection">
+    <h2>1 · Describe the job</h2>
+    <p class="muted">Plain English works — include sizes when you know them ("200 sq ft", "3 bedrooms", "40 ft of fence"). Everything stays in your browser.</p>
+    <label>Job description
+      <textarea id="jobText" placeholder="e.g. Kitchen remodel: new base and wall cabinets, butcher block countertop, repaint 120 sq ft of drywall"></textarea>
+    </label>
+    <div class="grid">
+      <label>Trade
+        <select id="tradeSelect"></select>
+      </label>
+      <div>
+        <label style="margin-bottom:6px">Waste factor</label>
+        <div class="waste-toggle" id="wasteToggle" role="group" aria-label="Waste factor">
+          <button type="button" data-waste="0">0%</button>
+          <button type="button" data-waste="10" class="active">10%</button>
+          <button type="button" data-waste="15">15%</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <button type="button" id="generateBtn" class="primary">Generate materials list</button>
+      <button type="button" id="sampleBtn" class="ghost">Try a sample job</button>
+      <span id="genMsg" class="ok"></span>
+    </div>
+    <details class="ai-box" id="aiSection">
+      <summary>✨ Optional: polish descriptions with your own OpenAI key</summary>
+      <p class="muted">Paste a key to let AI tighten up your job description before the takeoff runs. The key is stored only in this browser's localStorage — it never leaves your device, and the list generator works fine without it.</p>
+      <div class="grid">
+        <label>OpenAI API key (optional)
+          <input type="password" id="openaiKey" placeholder="sk-…" autocomplete="off">
+        </label>
+      </div>
+      <div class="row">
+        <button type="button" id="saveKeyBtn" class="small">Save key locally</button>
+        <button type="button" id="clearKeyBtn" class="small ghost">Remove key</button>
+        <span id="keyMsg" class="ok"></span>
+      </div>
+    </details>
+  </section>
+
+  <!-- Results -->
+  <section class="card" id="listSection" style="display:none">
+    <h2>2 · Your materials list <span class="muted" id="listTrade"></span></h2>
+    <div class="progress-label" id="boughtLabel">0 of 0 bought</div>
+    <div class="progress"><div id="boughtBar"></div></div>
+    <div class="table-wrap">
+      <table class="takeoff" id="takeoffTable">
+        <thead>
+          <tr>
+            <th class="no-print">Bought</th>
+            <th>Item</th>
+            <th class="num">Qty</th>
+            <th>Unit</th>
+            <th class="num">Unit price</th>
+            <th class="num">Line total</th>
+          </tr>
+        </thead>
+        <tbody id="takeoffBody"></tbody>
+      </table>
+    </div>
+    <div class="row no-print">
+      <label style="flex:1;min-width:200px">Save as
+        <input type="text" id="listName" placeholder="e.g. Smith kitchen — cabinets" maxlength="80">
+      </label>
+      <button type="button" id="saveListBtn" class="primary">Save list</button>
+      <button type="button" id="printBtn" class="ghost">🖨 Print checklist</button>
+      <span id="saveMsg" class="ok"></span>
+    </div>
+  </section>
+
+  <!-- Library -->
+  <section class="card" id="librarySection">
+    <h2>3 · Saved lists</h2>
+    <p class="muted">Stored in this browser only. Load one back to keep checking items off.</p>
+    <div id="libraryList"><p class="empty">No saved lists yet — generate one above and save it.</p></div>
+  </section>
+
+  <footer class="muted center">
+    MaterialList AI runs entirely in your browser — no account, no tracking. Prices are rough estimates; confirm at your supplier.
+  </footer>
+</main>
+
+<script src="js/materials.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

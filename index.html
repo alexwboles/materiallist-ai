@@ -9,15 +9,29 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">MaterialList <span class="ai">AI</span></div>
-  <div class="tagline">Describe the job. Get the shopping list. Nothing forgotten.</div>
+  <div class="tape" aria-hidden="true"></div>
+  <div class="brand-row">
+    <span class="brand-mark" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+    </span>
+    <div>
+      <div class="brand">MaterialList <span class="ai">AI</span></div>
+      <div class="tagline">Describe the job. Get the shopping list. Nothing forgotten.</div>
+    </div>
+    <div class="hdr-stats no-print"><span class="hdr-stat"><b>9</b> trade banks</span><span class="hdr-stat"><b>100%</b> local</span></div>
+  </div>
 </header>
 
 <main>
   <!-- Input -->
-  <section class="card" id="inputSection">
-    <h2>1 · Describe the job</h2>
-    <p class="muted">Plain English works — include sizes when you know them ("200 sq ft", "3 bedrooms", "40 ft of fence"). Everything stays in your browser.</p>
+  <section class="card blueprint" id="inputSection">
+    <div class="card-head">
+      <div>
+        <p class="kicker">Step 1</p>
+        <h2>Describe the job</h2>
+        <p class="muted">Plain English works — include sizes when you know them ("200 sq ft", "3 bedrooms", "40 ft of fence"). Everything stays in your browser.</p>
+      </div>
+    </div>
     <label>Job description
       <textarea id="jobText" placeholder="e.g. Kitchen remodel: new base and wall cabinets, butcher block countertop, repaint 120 sq ft of drywall"></textarea>
     </label>
@@ -57,9 +71,16 @@
 
   <!-- Results -->
   <section class="card" id="listSection" style="display:none">
-    <h2>2 · Your materials list <span class="muted" id="listTrade"></span></h2>
-    <div class="progress-label" id="boughtLabel">0 of 0 bought</div>
-    <div class="progress"><div id="boughtBar"></div></div>
+    <div class="card-head split">
+      <div>
+        <p class="kicker">Step 2</p>
+        <h2>Your materials list <span class="muted" id="listTrade"></span></h2>
+      </div>
+      <div class="progress-block">
+        <div class="progress-label" id="boughtLabel">0 of 0 bought</div>
+        <div class="progress tape-measure"><div id="boughtBar"></div></div>
+      </div>
+    </div>
     <div class="table-wrap">
       <table class="takeoff" id="takeoffTable">
         <thead>
@@ -87,7 +108,8 @@
 
   <!-- Library -->
   <section class="card" id="librarySection">
-    <h2>3 · Saved lists</h2>
+    <p class="kicker">Step 3</p>
+    <h2>Saved lists</h2>
     <p class="muted">Stored in this browser only. Load one back to keep checking items off.</p>
     <div id="libraryList"><p class="empty">No saved lists yet — generate one above and save it.</p></div>
   </section>

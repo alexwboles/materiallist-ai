@@ -14,7 +14,7 @@
   --ok: #1a7a4c;
   --warn: #b45309;
   --danger: #b3261e;
-  --radius: 14px;
+  --radius: 0;
   --shadow: 0 1px 3px rgba(28, 36, 32, .08), 0 6px 18px rgba(28, 36, 32, .06);
   --focus-ring: rgba(26, 122, 76, .25);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -50,7 +50,7 @@ body {
   gap: 16px;
 }
 .brand-mark {
-  width: 50px; height: 50px; border-radius: 14px; flex: 0 0 auto;
+  width: 50px; height: 50px; border-radius: 0; flex: 0 0 auto;
   background: var(--accent);
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 14px rgba(26, 122, 76, .45), inset 0 0 0 2px rgba(255,255,255,.2);
@@ -60,7 +60,7 @@ body {
   background: transparent;
   color: #8fd8ae;
   border: 1.5px solid #3e5c4b;
-  border-radius: 7px;
+  border-radius: 0;
   padding: 1px 8px;
   font-size: 13px;
   font-weight: 800;
@@ -73,7 +73,7 @@ body {
 .hdr-stat {
   background: rgba(255,255,255,.06);
   border: 1px solid #3a433a;
-  border-radius: 10px;
+  border-radius: 0;
   padding: 8px 14px;
   font-size: 12px;
   color: #a8b3a4;
@@ -114,7 +114,7 @@ textarea, select, input[type="text"], input[type="password"] {
   padding: 11px 14px;
   font-size: 15px;
   border: 1.5px solid #d8d5c8;
-  border-radius: 10px;
+  border-radius: 0;
   background: #fff;
   color: var(--ink);
   font-family: inherit;
@@ -138,7 +138,7 @@ button {
   font-size: 15px;
   font-family: inherit;
   font-weight: 650;
-  border-radius: 10px;
+  border-radius: 0;
   padding: 11px 22px;
   border: 1.5px solid #d8d5c8;
   background: #fff;
@@ -158,21 +158,21 @@ button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 .ok { color: var(--ok); font-weight: 650; font-size: 14px; }
 
 /* waste toggle — chunky segmented control */
-.waste-toggle { display: inline-flex; border: 1.5px solid #d8d5c8; border-radius: 12px; overflow: hidden; background: #fff; padding: 3px; gap: 3px; }
-.waste-toggle button { border: none; border-radius: 8px; padding: 9px 20px; font-size: 14px; background: transparent; color: var(--muted); }
+.waste-toggle { display: inline-flex; border: 1.5px solid #d8d5c8; border-radius: 0; overflow: hidden; background: #fff; padding: 3px; gap: 3px; }
+.waste-toggle button { border: none; border-radius: 0; padding: 9px 20px; font-size: 14px; background: transparent; color: var(--muted); }
 .waste-toggle button + button { border-left: none; }
 .waste-toggle button:hover { color: var(--accent-dark); transform: none; }
 .waste-toggle button.active { background: var(--ink); color: #fff; box-shadow: 0 2px 6px rgba(28,36,32,.25); }
 
 /* progress — tape-measure style */
 .progress-block { min-width: 220px; }
-.progress { height: 12px; background: #efece1; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin: 8px 0 4px; position: relative; }
+.progress { height: 12px; background: #efece1; border: 1px solid var(--line); border-radius: 0; overflow: hidden; margin: 8px 0 4px; position: relative; }
 .tape-measure { background-image: repeating-linear-gradient(90deg, transparent 0 9px, rgba(28,36,32,.12) 9px 10px); }
-.progress > div { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .35s ease; }
+.progress > div { height: 100%; width: 0; background: var(--accent); border-radius: 0; transition: width .35s ease; }
 .progress-label { font-size: 13px; font-weight: 700; color: var(--ink); }
 
 /* materials table — invoice style */
-.table-wrap { overflow-x: auto; margin-top: 14px; border: 1.5px solid var(--ink); border-radius: 12px; }
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1.5px solid var(--ink); border-radius: 0; }
 table.takeoff { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 620px; background: #fff; }
 table.takeoff th, table.takeoff td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.takeoff tbody tr:last-child td { border-bottom: none; }
@@ -195,14 +195,14 @@ tr.total-row td:last-child { color: var(--accent-dark); }
 /* list library — index cards */
 .lib-row {
   display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  border: 1px solid var(--line); border-left: 5px solid var(--accent); border-radius: 10px;
+  border: 1px solid var(--line); border-left: 5px solid var(--accent); border-radius: 0;
   padding: 14px 18px; margin: 10px 0; font-size: 14.5px; background: #fff;
   box-shadow: var(--shadow); transition: transform .12s ease;
 }
 .lib-row:hover { transform: translateX(2px); }
 .lib-row .lib-meta { color: var(--muted); font-size: 12.5px; }
 
-details.ai-box { margin-top: 18px; border: 1.5px dashed #cfcab8; border-radius: 12px; padding: 14px 18px; background: rgba(255,255,255,.7); }
+details.ai-box { margin-top: 18px; border: 1.5px dashed #cfcab8; border-radius: 0; padding: 14px 18px; background: rgba(255,255,255,.7); }
 details.ai-box summary { cursor: pointer; font-size: 13.5px; color: var(--muted); font-weight: 650; }
 
 footer { margin-top: 36px; font-size: 13px; color: var(--muted); }

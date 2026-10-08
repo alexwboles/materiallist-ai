@@ -68,12 +68,49 @@
 
   function regenerate(baseItems, jobText, trade, name) {
     var items = ML.applyWaste(baseItems, wastePct);
-    var bought = current && current.bought ? current.bought.slice(0, items.length) : [];
-    while (bought.length < items.length) bought.push(false);
+    var custom = current && current.custom ? current.custom.slice() : [];
+    var bought = current && current.bought ? current.bought.slice() : [];
     current = { name: name || '', trade: trade, jobText: jobText, wastePct: wastePct,
-                baseItems: baseItems, items: items, bought: bought };
+                baseItems: baseItems, items: items, bought: bought, custom: custom };
     saveJSON(LS_CURRENT, current);
     renderList();
+  }
+
+  // Hand-added items ride alongside the generated takeoff (never waste-adjusted).
+  function mergedItems() {
+    return current ? current.items.concat(current.custom || []) : [];
+  }
+  function mergedBought() {
+    if (!current) return [];
+    var n = mergedItems().length;
+    while (current.bought.length < n) current.bought.push(false);
+    return current.bought;
+  }
+  function persistCurrent() { saveJSON(LS_CURRENT, current); }
+
+  // Keep the saved-library copy in sync when the open list changes.
+  function syncSavedBought() {
+    if (current && current.name) {
+      var lists = getLists();
+      var match = lists.filter(function (l) { return l.name === current.name; })[0];
+      if (match) {
+        match.bought = current.bought;
+        match.items = current.items;
+        match.custom = current.custom;
+        saveJSON(LS_LISTS, lists);
+        renderLibrary();
+      }
+    }
+  }
+
+  function downloadFile(filename, text, mime) {
+    var blob = new Blob([text], { type: mime });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 400);
   }
 
   function runGeneration(jobText, trade) {
@@ -141,24 +178,28 @@
   }
 
   function renderList() {
-    if (!current || !current.items.length) {
+    var items = mergedItems();
+    if (!current || !items.length) {
       $('listSection').style.display = 'none';
       return;
     }
+    var bought = mergedBought();
     $('listSection').style.display = '';
     $('listTrade').textContent = '· ' + ML.TRADES[current.trade].label + ' · ' + wastePct + '% waste';
-    var cost = ML.estimateCost(current.items);
+    var cost = ML.estimateCost(items);
     var body = $('takeoffBody');
     body.innerHTML = '';
     cost.lines.forEach(function (line, i) {
       var tr = document.createElement('tr');
-      if (current.bought[i]) tr.className = 'bought';
+      if (bought[i]) tr.className = 'bought';
       var note = line.note ? '<div class="item-note">' + esc(line.note) + '</div>' : '';
       tr.innerHTML =
         '<td class="no-print"><input type="checkbox" class="buy-check" data-i="' + i + '"' +
-        (current.bought[i] ? ' checked' : '') + ' aria-label="Bought: ' + esc(line.name) + '"></td>' +
+        (bought[i] ? ' checked' : '') + ' aria-label="Bought: ' + esc(line.name) + '"></td>' +
         '<td class="item-name">' + esc(line.name) + note + '</td>' +
-        '<td class="num">' + line.qty + '</td>' +
+        '<td class="num"><button type="button" class="stepper" data-act="dec" data-i="' + i + '" aria-label="Decrease quantity">−</button>' +
+        '<span class="qty-val">' + line.qty + '</span>' +
+        '<button type="button" class="stepper" data-act="inc" data-i="' + i + '" aria-label="Increase quantity">+</button></td>' +
         '<td>' + esc(line.unit) + '</td>' +
         '<td class="num">' + ML.fmtMoney(line.unitPrice) + '</td>' +
         '<td class="num">' + ML.fmtMoney(line.lineTotal) + '</td>';
@@ -173,9 +214,13 @@
   }
 
   function updateProgress() {
-    var bought = current.bought.filter(Boolean).length;
-    var total = current.items.length;
-    $('boughtLabel').textContent = bought + ' of ' + total + ' bought';
+    var items = mergedItems();
+    var boughtArr = mergedBought();
+    var bought = boughtArr.filter(Boolean).length;
+    var total = items.length;
+    var rc = ML.remainingCost(items, boughtArr);
+    $('boughtLabel').textContent = bought + ' of ' + total + ' bought · ' +
+      ML.fmtMoney(rc.remaining) + ' remaining of ' + ML.fmtMoney(rc.total);
     $('boughtBar').style.width = total ? (bought / total * 100) + '%' : '0';
   }
 
@@ -203,6 +248,7 @@
         ' · ' + total + ' items · ' + bought + ' bought · ' + esc(when) + '</span></div>' +
         '<div class="row" style="margin:0">' +
         '<button type="button" class="small" data-load="' + entry.id + '">Load</button>' +
+        '<button type="button" class="small" data-dup="' + entry.id + '">Duplicate</button>' +
         '<button type="button" class="danger" data-del="' + entry.id + '">Delete</button></div>';
       box.appendChild(row);
     });
@@ -226,7 +272,8 @@
       wastePct: current.wastePct,
       baseItems: current.baseItems,
       items: current.items,
-      bought: current.bought
+      bought: current.bought,
+      custom: current.custom || []
     });
     saveJSON(LS_LISTS, lists.slice(0, 50));
     current.name = name;
@@ -240,6 +287,7 @@
   function libraryClick(e) {
     var loadBtn = e.target.closest('[data-load]');
     var delBtn = e.target.closest('[data-del]');
+    var dupBtn = e.target.closest('[data-dup]');
     var lists = getLists();
     if (loadBtn) {
       var entry = lists.filter(function (l) { return l.id === loadBtn.getAttribute('data-load'); })[0];
@@ -252,7 +300,17 @@
       $('jobText').value = entry.jobText || '';
       current = null;
       regenerate(entry.baseItems || entry.items, entry.jobText || '', entry.trade, entry.name);
+      current.custom = entry.custom || [];
+      persistCurrent();
+      renderList();
       window.scrollTo({ top: $('listSection').offsetTop - 12, behavior: 'smooth' });
+    } else if (dupBtn) {
+      var src = lists.filter(function (l) { return l.id === dupBtn.getAttribute('data-dup'); })[0];
+      if (!src) return;
+      var fresh = getLists();
+      fresh.unshift(ML.cloneListEntry(src));
+      saveJSON(LS_LISTS, fresh.slice(0, 50));
+      renderLibrary();
     } else if (delBtn) {
       var id = delBtn.getAttribute('data-del');
       saveJSON(LS_LISTS, lists.filter(function (l) { return l.id !== id; }));
@@ -287,19 +345,64 @@
       var chk = e.target.closest('.buy-check');
       if (!chk || !current) return;
       var i = parseInt(chk.getAttribute('data-i'), 10);
-      current.bought[i] = chk.checked;
-      saveJSON(LS_CURRENT, current);
+      mergedBought()[i] = chk.checked;
+      persistCurrent();
       renderList();
-      // sync saved copy if this list was saved
-      if (current.name) {
-        var lists = getLists();
-        var match = lists.filter(function (l) { return l.name === current.name; })[0];
-        if (match) { match.bought = current.bought; saveJSON(LS_LISTS, lists); renderLibrary(); }
+      syncSavedBought();
+    });
+
+    $('takeoffBody').addEventListener('click', function (e) {
+      var st = e.target.closest('.stepper');
+      if (!st || !current) return;
+      var i = parseInt(st.getAttribute('data-i'), 10);
+      var delta = st.getAttribute('data-act') === 'inc' ? 1 : -1;
+      var split = current.items.length;
+      if (i < split) {
+        current.items = ML.adjustItemQty(current.items, i, delta);
+      } else {
+        current.custom = ML.adjustItemQty(current.custom, i - split, delta);
       }
+      persistCurrent();
+      renderList();
+      syncSavedBought();
     });
 
     $('saveListBtn').addEventListener('click', saveCurrentList);
     $('printBtn').addEventListener('click', function () { window.print(); });
+    $('csvBtn').addEventListener('click', function () {
+      if (!current || !mergedItems().length) return;
+      downloadFile('materials-list.csv', ML.listToCSV(mergedItems(), mergedBought()), 'text/csv;charset=utf-8');
+    });
+
+    $('addItemBtn').addEventListener('click', function () {
+      var f = $('customForm');
+      f.style.display = f.style.display === 'none' ? '' : 'none';
+      if (f.style.display !== 'none') $('cName').focus();
+    });
+    $('cCancel').addEventListener('click', function () {
+      $('customForm').style.display = 'none';
+      $('cMsg').textContent = '';
+    });
+    $('cAdd').addEventListener('click', function () {
+      if (!current) return;
+      try {
+        current.custom = ML.addCustomItem(current.custom || [], {
+          name: $('cName').value,
+          qty: parseFloat($('cQty').value),
+          unit: $('cUnit').value.trim() || 'each',
+          unitPrice: parseFloat($('cPrice').value) || 0
+        });
+      } catch (err) {
+        $('cMsg').textContent = err.message.replace(/^addCustomItem: /, '');
+        return;
+      }
+      $('cName').value = ''; $('cQty').value = ''; $('cUnit').value = ''; $('cPrice').value = '';
+      $('cMsg').textContent = 'Added ✓';
+      setTimeout(function () { $('cMsg').textContent = ''; }, 2500);
+      persistCurrent();
+      renderList();
+      syncSavedBought();
+    });
     $('libraryList').addEventListener('click', libraryClick);
 
     $('saveKeyBtn').addEventListener('click', function () {
@@ -337,6 +440,7 @@
       $('tradeSelect').value = saved.trade;
       $('jobText').value = saved.jobText || '';
       current = saved;
+      current.custom = current.custom || [];
       renderList();
     }
   }

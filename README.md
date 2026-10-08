@@ -11,7 +11,8 @@ A forgotten $8 part costs a $60 supply run and an hour of labor. Manual takeoffs
 1. **Describe the job** — "Reroof 1200 sq ft house with shingles" or "Kitchen remodel: 6 base cabinets, butcher block countertop"
 2. **Pick the trade** — 9 trade banks (electrical, plumbing, HVAC, carpentry/framing, drywall/painting, roofing, flooring, masonry/concrete, landscaping) with keyword-matched materials
 3. **Get the takeoff** — quantities auto-scaled from the sizes in your text ("200 sq ft" → 200 sq ft of flooring), 0/10/15% waste factor, line totals + grand total
-4. **Work the list** — check items off as you buy them ("7 of 12 bought"), save named lists, print a checkbox checklist for the store run
+4. **Work the list** — check items off as you buy them ("7 of 12 bought · $120 remaining of $480"), save named lists, duplicate saved lists, print a checkbox checklist for the store run, export to CSV
+5. **Tune the takeoff** — adjust any quantity with −/+ steppers, or add your own custom items (name, qty, unit, price) to the list
 
 If you paste your own `OPENAI_API_KEY` (stored only in this browser's localStorage), the app will polish your rough description before generating — but the generator works 100% offline with zero keys.
 

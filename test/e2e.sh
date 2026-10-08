@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# materiallist-ai e2e tests — 7 flows exercised through the real materials logic in Node.
+# materiallist-ai e2e tests — 11 flows exercised through the real materials logic in Node.
 set -u
 cd "$(dirname "$0")/.."
 
 node << 'EOF'
 require('./js/materials.js');
 var ML = globalThis.ML;
-var failures = 0;
+var failures = 0, flowCount = 0;
 function flow(name, fn) {
+  flowCount++;
   try { fn(); console.log('PASS: ' + name); }
   catch (e) { failures++; console.log('FAIL: ' + name + ' — ' + e.message); }
 }
@@ -99,6 +100,65 @@ flow('parseQuantities extracts numbers+units', function () {
   assert(q2.sqft === 0 && q2.linearFt === 0 && q2.rooms === 0, 'expected all zeros');
 });
 
+// 8. Stepper journey: bump qty up, clamp at zero, totals follow.
+flow('quantity steppers adjust totals', function () {
+  var r = ML.generateList({ jobText: 'Install luxury vinyl plank in 200 sq ft living room', trade: 'flooring' });
+  var items = ML.applyWaste(r.items, 10);
+  var idx = items.map(function (i) { return i.name; }).indexOf('Luxury vinyl plank (per sq ft)');
+  var before = ML.estimateCost(items).total;
+  var bumped = ML.adjustItemQty(items, idx, 10);
+  var after = ML.estimateCost(bumped).total;
+  assert(after > before, 'total should grow after +10 sq ft');
+  var zeroed = ML.adjustItemQty(items, idx, -10000);
+  assert(zeroed[idx].qty === 0, 'qty should clamp at 0');
+  var ztotal = ML.estimateCost(zeroed).total;
+  assert(ztotal < before, 'zeroing the main item should shrink the total');
+  console.log('   ($' + before.toFixed(2) + ' -> $' + after.toFixed(2) + ' -> $' + ztotal.toFixed(2) + ')');
+});
+
+// 9. Custom item journey: add, price, appears in cost and CSV.
+flow('custom item added to takeoff', function () {
+  var items = [{ name: 'A', qty: 2, unit: 'each', unitPrice: 5, note: '' }];
+  var withCustom = ML.addCustomItem(items, { name: 'Specialty screws', qty: 3, unit: 'box', unitPrice: 12.99 });
+  assert(withCustom.length === 2, 'custom item appended');
+  var cost = ML.estimateCost(withCustom);
+  assert(Math.abs(cost.total - (10 + 38.97)) < 0.01, 'total should include custom item, got ' + cost.total);
+  var csv = ML.listToCSV(withCustom, [false, false]);
+  assert(csv.indexOf('Specialty screws') !== -1, 'custom item missing from CSV');
+  console.log('   (total $' + cost.total.toFixed(2) + ' includes custom line)');
+});
+
+// 10. Remaining-cost journey: buy half the list, remaining shrinks accordingly.
+flow('remaining cost tracks check-offs', function () {
+  var r = ML.generateList({ jobText: 'Reroof 1200 sq ft house with shingles and underlayment', trade: 'roofing' });
+  var items = ML.applyWaste(r.items, 10);
+  var rc0 = ML.remainingCost(items, items.map(function () { return false; }));
+  assert(Math.abs(rc0.remaining - rc0.total) < 0.01, 'nothing bought -> remaining == total');
+  var bought = items.map(function (_, i) { return i < Math.floor(items.length / 2); });
+  var rc1 = ML.remainingCost(items, bought);
+  assert(rc1.remaining < rc0.total && rc1.remaining > 0, 'partial buy should split the total');
+  assert(Math.abs(rc1.remaining + rc1.boughtTotal - rc1.total) < 0.01, 'split must reconcile');
+  var all = ML.remainingCost(items, items.map(function () { return true; }));
+  assert(all.remaining === 0, 'all bought -> $0 remaining');
+  console.log('   (' + ML.fmtMoney(rc0.total) + ' total -> ' + ML.fmtMoney(rc1.remaining) + ' remaining)');
+});
+
+// 11. Duplicate journey: cloned entry keeps items/progress under a new id.
+flow('saved list duplicates cleanly', function () {
+  var entry = {
+    id: 'l_orig', name: 'Smith kitchen', savedAt: '2026-10-01T00:00:00.000Z',
+    trade: 'carpentry', jobText: 'x', wastePct: 10,
+    baseItems: [], items: [{ name: 'A', qty: 2, unit: 'each', unitPrice: 5 }],
+    bought: [true], custom: [{ name: 'C', qty: 1, unit: 'each', unitPrice: 9 }]
+  };
+  var copy = ML.cloneListEntry(entry, 'l_copy');
+  assert(copy.id === 'l_copy' && copy.id !== entry.id, 'fresh id required');
+  assert(copy.name === 'Smith kitchen (copy)', 'copy name wrong: ' + copy.name);
+  assert(copy.items.length === 1 && copy.bought[0] === true, 'items/progress carried over');
+  assert(copy.custom.length === 1, 'custom items carried over');
+  assert(copy.savedAt !== entry.savedAt, 'savedAt should refresh');
+});
+
 if (failures) { console.log('E2E: ' + failures + ' flow(s) FAILED'); process.exit(1); }
-console.log('E2E: 7/7 flows passed');
+console.log('E2E: ' + flowCount + '/' + flowCount + ' flows passed');
 EOF

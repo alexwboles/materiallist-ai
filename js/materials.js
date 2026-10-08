@@ -385,6 +385,79 @@
     return '$' + Number(n).toFixed(2);
   }
 
+  // Adjust one item's quantity by delta (pure; qty clamped >= 0, rounded to 2).
+  function adjustItemQty(items, index, delta) {
+    var arr = (items || []).slice();
+    if (index < 0 || index >= arr.length) return arr;
+    var it = arr[index];
+    var qty = Math.round((Number(it.qty) + Number(delta)) * 100) / 100;
+    arr[index] = {
+      name: it.name, qty: Math.max(0, qty), unit: it.unit,
+      unitPrice: it.unitPrice, note: it.note || '', wastePct: it.wastePct || 0
+    };
+    return arr;
+  }
+
+  // Append a hand-added item. Throws on missing name / non-positive qty.
+  function addCustomItem(items, spec) {
+    spec = spec || {};
+    var name = String(spec.name || '').trim();
+    if (!name) throw new Error('addCustomItem: name is required');
+    var qty = Math.round(Number(spec.qty) * 100) / 100;
+    if (!isFinite(qty) || qty <= 0) throw new Error('addCustomItem: qty must be > 0');
+    var price = Math.round(Number(spec.unitPrice || 0) * 100) / 100;
+    if (!isFinite(price) || price < 0) throw new Error('addCustomItem: unitPrice must be >= 0');
+    var arr = (items || []).slice();
+    arr.push({
+      name: name, qty: qty, unit: String(spec.unit || 'each'),
+      unitPrice: price, note: String(spec.note || ''), wastePct: 0, custom: true
+    });
+    return arr;
+  }
+
+  // Split the estimate into bought vs remaining. bought[i] parallels items[i].
+  function remainingCost(items, bought) {
+    var cost = estimateCost(items);
+    var remaining = 0, boughtTotal = 0;
+    cost.lines.forEach(function (line, i) {
+      if (bought && bought[i]) boughtTotal += line.lineTotal;
+      else remaining += line.lineTotal;
+    });
+    return {
+      total: cost.total,
+      remaining: Math.round(remaining * 100) / 100,
+      boughtTotal: Math.round(boughtTotal * 100) / 100
+    };
+  }
+
+  // CSV of the current list (one row per item, with bought flag).
+  function listToCSV(items, bought) {
+    function cell(v) {
+      var s = String(v == null ? '' : v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+    var cost = estimateCost(items);
+    var rows = [['item', 'qty', 'unit', 'unit_price', 'line_total', 'bought', 'note']];
+    cost.lines.forEach(function (line, i) {
+      rows.push([
+        line.name, line.qty, line.unit,
+        line.unitPrice.toFixed(2), line.lineTotal.toFixed(2),
+        bought && bought[i] ? 'yes' : 'no', line.note || ''
+      ]);
+    });
+    return rows.map(function (r) { return r.map(cell).join(','); }).join('\n');
+  }
+
+  // Duplicate a saved-list entry: fresh id, " (copy)" name, same items/progress.
+  function cloneListEntry(entry, newId) {
+    if (!entry || typeof entry !== 'object') throw new Error('cloneListEntry: entry is required');
+    var copy = JSON.parse(JSON.stringify(entry));
+    copy.id = newId || ('l' + Date.now());
+    copy.name = (entry.name || 'Untitled list') + ' (copy)';
+    copy.savedAt = new Date().toISOString();
+    return copy;
+  }
+
   ML.TRADES = TRADES;
   ML.tradeKeys = tradeKeys;
   ML.parseQuantities = parseQuantities;
@@ -392,4 +465,9 @@
   ML.applyWaste = applyWaste;
   ML.estimateCost = estimateCost;
   ML.fmtMoney = fmtMoney;
+  ML.adjustItemQty = adjustItemQty;
+  ML.addCustomItem = addCustomItem;
+  ML.remainingCost = remainingCost;
+  ML.listToCSV = listToCSV;
+  ML.cloneListEntry = cloneListEntry;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

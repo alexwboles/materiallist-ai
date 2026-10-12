@@ -144,8 +144,66 @@ check "cloneListEntry: fresh id, (copy) name, deep copy" node -e "
   console.log('clone ok');
 "
 check "index.html has new control ids" sh -c '
-  for id in csvBtn addItemBtn customForm cName cQty cUnit cPrice cAdd cCancel; do
+  for id in csvBtn addItemBtn customForm cName cQty cUnit cPrice cAdd cCancel costPerUnit varianceLine staplesBox; do
     grep -q "id=\"$id\"" index.html || { echo "missing id=$id"; exit 1; }
   done'
 
-echo "SMOKE: $PASS/17 passed"
+check "costPerUnit: total divided by parsed quantities" node -e "
+  require('./js/materials.js');
+  var ML = globalThis.ML;
+  var items = [{ name: 'Shingles', qty: 40, unit: 'bundle', unitPrice: 36.99, note: '' }];
+  var cpu = ML.costPerUnit(items, { sqft: 1200, linearFt: 0, rooms: 0 });
+  if (cpu.total !== 1479.6) { console.error('total ' + cpu.total); process.exit(1); }
+  if (cpu.breakdown.length !== 1 || cpu.breakdown[0].unit !== 'sq ft' || cpu.breakdown[0].per !== 1.23) {
+    console.error(JSON.stringify(cpu.breakdown)); process.exit(1);
+  }
+  var none = ML.costPerUnit(items, { sqft: 0, linearFt: 0, rooms: 0 });
+  if (none.breakdown.length !== 0) { console.error('should be empty'); process.exit(1); }
+  console.log('costPerUnit ok');
+"
+
+check "applyActuals: estimate vs actual variance" node -e "
+  require('./js/materials.js');
+  var ML = globalThis.ML;
+  var items = [
+    { name: 'A', qty: 10, unit: 'each', unitPrice: 5, note: '' },
+    { name: 'B', qty: 2, unit: 'each', unitPrice: 20, note: '' }
+  ];
+  var v = ML.applyActuals(items, [6, null]);
+  if (v.recorded !== 1 || v.of !== 2) { console.error('recorded ' + v.recorded); process.exit(1); }
+  if (v.lines[0].variance !== 10) { console.error('line variance ' + v.lines[0].variance); process.exit(1); }
+  if (v.lines[1].variance !== null) { console.error('skipped line should be null'); process.exit(1); }
+  if (v.variance !== 10) { console.error('total variance ' + v.variance); process.exit(1); }
+  var under = ML.applyActuals(items, [4, 18]);
+  if (under.variance !== -14) { console.error('under variance ' + under.variance); process.exit(1); }
+  var empty = ML.applyActuals(items, [null, null]);
+  if (empty.recorded !== 0 || empty.variance !== null) { console.error('empty actuals wrong'); process.exit(1); }
+  console.log('applyActuals ok');
+"
+
+check "forgottenStaples: missing trade staples flagged" node -e "
+  require('./js/materials.js');
+  var ML = globalThis.ML;
+  var gen = ML.generateList({ jobText: 'recessed lights and outlets in 2 rooms', trade: 'electrical' });
+  var missing = ML.forgottenStaples('electrical', gen.items);
+  if (!missing.length) { console.error('expected missing staples'); process.exit(1); }
+  var names = missing.map(function (s) { return s.name; });
+  var inList = gen.items.map(function (i) { return i.name; });
+  missing.forEach(function (s) {
+    if (inList.indexOf(s.name) !== -1) { console.error(s.name + ' is already in the list'); process.exit(1); }
+  });
+  var none = ML.forgottenStaples('electrical', gen.items.concat(missing.map(function (s) {
+    return { name: s.name, qty: 1, unit: s.unit, unitPrice: s.unitPrice, note: '' };
+  })));
+  if (none.length !== 0) { console.error('should be empty after adding all staples'); process.exit(1); }
+  console.log('forgottenStaples ok: ' + names.join('; '));
+"
+
+check "app.js wires cost/variance/staples + preserves list state on load" sh -c '
+  grep -q "renderCostPerUnit" js/app.js &&
+  grep -q "renderVariance" js/app.js &&
+  grep -q "renderStaples" js/app.js &&
+  grep -q "current.actuals = entry.actuals" js/app.js &&
+  grep -q "current.bought = entry.bought" js/app.js'
+
+echo "SMOKE: $PASS/21 passed"

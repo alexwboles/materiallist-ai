@@ -159,6 +159,46 @@ flow('saved list duplicates cleanly', function () {
   assert(copy.savedAt !== entry.savedAt, 'savedAt should refresh');
 });
 
+flow('quoting flow: reroof estimate yields per-sq-ft material cost', function () {
+  var gen = ML.generateList({ jobText: 'Reroof 1200 sq ft house with shingles', trade: 'roofing' });
+  assert(gen.quantities.sqft === 1200, 'sqft parsed');
+  var items = ML.applyWaste(gen.items, 10);
+  var cpu = ML.costPerUnit(items, gen.quantities);
+  assert(cpu.breakdown.length === 1 && cpu.breakdown[0].unit === 'sq ft', 'sq-ft breakdown');
+  assert(Math.abs(cpu.breakdown[0].per - cpu.total / 1200) < 0.01, 'per-sqft math');
+  console.log('   (roofing materials: ' + ML.fmtMoney(cpu.breakdown[0].per) + ' / sq ft on ' + ML.fmtMoney(cpu.total) + ')');
+});
+
+flow('receipt flow: actual store prices vs estimate variance', function () {
+  var gen = ML.generateList({ jobText: 'Install luxury vinyl plank in 200 sq ft living room with new quarter-round trim and transition strips', trade: 'flooring' });
+  var items = ML.applyWaste(gen.items, 0);
+  assert(items.length >= 2, 'takeoff has 2+ items');
+  var actuals = items.map(function () { return null; });
+  // Contractor buys the first two items, prices differ from estimate
+  actuals[0] = Math.round(items[0].unitPrice * 1.1 * 100) / 100; // 10% over
+  actuals[1] = Math.round(items[1].unitPrice * 0.9 * 100) / 100; // 10% under
+  var v = ML.applyActuals(items, actuals);
+  assert(v.recorded === 2, 'two actuals recorded');
+  var expect = Math.round(((actuals[0] - items[0].unitPrice) * items[0].qty +
+    (actuals[1] - items[1].unitPrice) * items[1].qty) * 100) / 100;
+  assert(Math.abs(v.variance - expect) < 0.02, 'variance reconciles: ' + v.variance + ' vs ' + expect);
+  console.log('   (receipt variance: ' + ML.fmtMoney(v.variance) + ' over ' + v.recorded + ' lines)');
+});
+
+flow('forgotten-staples flow: missing staples offered and addable', function () {
+  var gen = ML.generateList({ jobText: 'Hang 200 sq ft of drywall', trade: 'drywall' });
+  var items = ML.applyWaste(gen.items, 10);
+  var missing = ML.forgottenStaples('drywall', items);
+  assert(missing.length > 0, 'some staples missing from a keyword takeoff');
+  var withStaple = ML.addCustomItem(items, {
+    name: missing[0].name, qty: 1, unit: missing[0].unit, unitPrice: missing[0].unitPrice
+  });
+  var missing2 = ML.forgottenStaples('drywall', withStaple);
+  assert(missing2.length === missing.length - 1, 'adding a staple clears it from the missing list');
+  assert(missing.every(function (s) { return s.unitPrice > 0; }), 'staples carry prices');
+  console.log('   (' + missing.length + ' staples flagged, e.g. ' + missing[0].name + ')');
+});
+
 if (failures) { console.log('E2E: ' + failures + ' flow(s) FAILED'); process.exit(1); }
 console.log('E2E: ' + flowCount + '/' + flowCount + ' flows passed');
 EOF

@@ -66,12 +66,14 @@
 
   // ---------- generation pipeline ----------
 
-  function regenerate(baseItems, jobText, trade, name) {
+  function regenerate(baseItems, jobText, trade, name, quantities) {
     var items = ML.applyWaste(baseItems, wastePct);
     var custom = current && current.custom ? current.custom.slice() : [];
     var bought = current && current.bought ? current.bought.slice() : [];
+    var actuals = current && current.actuals ? current.actuals.slice() : [];
     current = { name: name || '', trade: trade, jobText: jobText, wastePct: wastePct,
-                baseItems: baseItems, items: items, bought: bought, custom: custom };
+                baseItems: baseItems, items: items, bought: bought, custom: custom,
+                actuals: actuals, quantities: quantities || (current && current.quantities) || null };
     saveJSON(LS_CURRENT, current);
     renderList();
   }
@@ -86,6 +88,13 @@
     while (current.bought.length < n) current.bought.push(false);
     return current.bought;
   }
+  function mergedActuals() {
+    if (!current) return [];
+    if (!current.actuals) current.actuals = [];
+    var n = mergedItems().length;
+    while (current.actuals.length < n) current.actuals.push(null);
+    return current.actuals;
+  }
   function persistCurrent() { saveJSON(LS_CURRENT, current); }
 
   // Keep the saved-library copy in sync when the open list changes.
@@ -97,6 +106,8 @@
         match.bought = current.bought;
         match.items = current.items;
         match.custom = current.custom;
+        match.actuals = current.actuals;
+        match.quantities = current.quantities;
         saveJSON(LS_LISTS, lists);
         renderLibrary();
       }
@@ -115,7 +126,7 @@
 
   function runGeneration(jobText, trade) {
     var result = ML.generateList({ jobText: jobText, trade: trade });
-    regenerate(result.items, jobText, trade, '');
+    regenerate(result.items, jobText, trade, '', result.quantities);
     var n = result.items.length;
     $('genMsg').textContent = n ? ('Found ' + n + ' materials.') : 'No materials matched — saved as empty.';
     setTimeout(function () { $('genMsg').textContent = ''; }, 4000);
@@ -184,6 +195,7 @@
       return;
     }
     var bought = mergedBought();
+    var actuals = mergedActuals();
     $('listSection').style.display = '';
     $('listTrade').textContent = '· ' + ML.TRADES[current.trade].label + ' · ' + wastePct + '% waste';
     var cost = ML.estimateCost(items);
@@ -193,6 +205,7 @@
       var tr = document.createElement('tr');
       if (bought[i]) tr.className = 'bought';
       var note = line.note ? '<div class="item-note">' + esc(line.note) + '</div>' : '';
+      var av = actuals[i];
       tr.innerHTML =
         '<td class="no-print"><input type="checkbox" class="buy-check" data-i="' + i + '"' +
         (bought[i] ? ' checked' : '') + ' aria-label="Bought: ' + esc(line.name) + '"></td>' +
@@ -202,15 +215,78 @@
         '<button type="button" class="stepper" data-act="inc" data-i="' + i + '" aria-label="Increase quantity">+</button></td>' +
         '<td>' + esc(line.unit) + '</td>' +
         '<td class="num">' + ML.fmtMoney(line.unitPrice) + '</td>' +
-        '<td class="num">' + ML.fmtMoney(line.lineTotal) + '</td>';
+        '<td class="num">' + ML.fmtMoney(line.lineTotal) + '</td>' +
+        '<td class="num no-print"><input type="number" class="actual-input" data-i="' + i + '" min="0" step="0.01" ' +
+        'placeholder="—" value="' + (av == null ? '' : av) + '" aria-label="Actual unit price paid: ' + esc(line.name) + '"></td>';
       body.appendChild(tr);
     });
     var trTotal = document.createElement('tr');
     trTotal.className = 'total-row';
     trTotal.innerHTML = '<td class="no-print"></td><td>Estimated total</td><td class="num"></td><td></td><td></td>' +
-      '<td class="num">' + ML.fmtMoney(cost.total) + '</td>';
+      '<td class="num">' + ML.fmtMoney(cost.total) + '</td><td class="no-print"></td>';
     body.appendChild(trTotal);
+    body.querySelectorAll('.actual-input').forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        var i = parseInt(inp.getAttribute('data-i'), 10);
+        var v = inp.value === '' ? null : parseFloat(inp.value);
+        current.actuals[i] = (v == null || isNaN(v) || v < 0) ? null : Math.round(v * 100) / 100;
+        persistCurrent(); syncSavedBought();
+        renderVariance(items);
+      });
+    });
+    renderCostPerUnit(items);
+    renderVariance(items);
+    renderStaples(items);
     updateProgress();
+  }
+
+  // Quoting helper: material cost per sq ft / linear ft / room.
+  function renderCostPerUnit(items) {
+    var box = $('costPerUnit');
+    var cpu = ML.costPerUnit(items, current.quantities);
+    if (!cpu.breakdown.length) { box.innerHTML = ''; return; }
+    box.innerHTML = 'Quoting: ' + cpu.breakdown.map(function (b) {
+      return '<strong>' + ML.fmtMoney(b.per) + '</strong> / ' + b.unit;
+    }).join(' · ') + ' in materials';
+  }
+
+  // Actual-vs-estimate variance, from the "Paid $/u" column.
+  function renderVariance(items) {
+    var box = $('varianceLine');
+    var v = ML.applyActuals(items, mergedActuals());
+    if (!v.recorded) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = '';
+    var cls = v.variance > 0 ? 'over' : (v.variance < 0 ? 'under' : '');
+    box.innerHTML = 'Actuals (' + v.recorded + '/' + v.of + ' lines): paid ' +
+      '<strong>' + ML.fmtMoney(v.actTotal) + '</strong> vs est ' + ML.fmtMoney(v.estTotal) +
+      ' — <strong class="' + cls + '">' + (v.variance > 0 ? '+' : '') + ML.fmtMoney(v.variance) + '</strong>';
+  }
+
+  // Forgotten staples: trade staples missing from this list, one click to add.
+  function renderStaples(items) {
+    var box = $('staplesBox');
+    var missing = ML.forgottenStaples(current.trade, items);
+    if (!missing.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = '';
+    box.innerHTML = '<h3>Don\u2019t forget these staples</h3>' +
+      '<p class="muted small">Commonly-forgotten ' + esc(ML.TRADES[current.trade].label.toLowerCase()) +
+      ' items missing from this list:</p>' +
+      missing.map(function (s, i) {
+        return '<div class="staple-row"><span>' + esc(s.name) +
+          ' <span class="muted small">' + ML.fmtMoney(s.unitPrice) + '/' + esc(s.unit) + '</span></span>' +
+          '<button type="button" class="ghost small staple-add" data-i="' + i + '">Add</button></div>';
+      }).join('');
+    box.querySelectorAll('.staple-add').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var s = missing[parseInt(btn.getAttribute('data-i'), 10)];
+        try {
+          current.custom = ML.addCustomItem(current.custom || [], {
+            name: s.name, qty: 1, unit: s.unit, unitPrice: s.unitPrice, note: s.note
+          });
+          persistCurrent(); syncSavedBought(); renderList();
+        } catch (e) { /* validation already passed */ }
+      });
+    });
   }
 
   function updateProgress() {
@@ -273,7 +349,9 @@
       baseItems: current.baseItems,
       items: current.items,
       bought: current.bought,
-      custom: current.custom || []
+      custom: current.custom || [],
+      actuals: current.actuals || [],
+      quantities: current.quantities || null
     });
     saveJSON(LS_LISTS, lists.slice(0, 50));
     current.name = name;
@@ -301,6 +379,9 @@
       current = null;
       regenerate(entry.baseItems || entry.items, entry.jobText || '', entry.trade, entry.name);
       current.custom = entry.custom || [];
+      current.bought = entry.bought || [];
+      current.actuals = entry.actuals || [];
+      current.quantities = entry.quantities || null;
       persistCurrent();
       renderList();
       window.scrollTo({ top: $('listSection').offsetTop - 12, behavior: 'smooth' });

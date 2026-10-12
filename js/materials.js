@@ -458,6 +458,55 @@
     return copy;
   }
 
+  // Cost-per-unit: total divided by the parsed job quantities.
+  // Handy for quoting ("this roof costs $4.20 per sq ft in materials").
+  function costPerUnit(items, quantities) {
+    var total = estimateCost(items).total;
+    var q = quantities || {};
+    var breakdown = [];
+    if (q.sqft > 0) breakdown.push({ unit: 'sq ft', per: round2(total / q.sqft) });
+    if (q.linearFt > 0) breakdown.push({ unit: 'linear ft', per: round2(total / q.linearFt) });
+    if (q.rooms > 0) breakdown.push({ unit: 'room', per: round2(total / q.rooms) });
+    return { total: total, breakdown: breakdown };
+  }
+
+  // Actual store prices vs the estimate. actuals: array parallel to items,
+  // each entry a number (actual unit price paid) or null/undefined to skip.
+  // Variance is computed only over lines with a recorded actual.
+  function applyActuals(items, actuals) {
+    var lines = [], estTotal = 0, actTotal = 0, estRecorded = 0, recorded = 0;
+    (items || []).forEach(function (it, i) {
+      var est = Math.round(it.qty * it.unitPrice * 100) / 100;
+      var raw = actuals ? actuals[i] : null;
+      var ap = (raw != null && raw !== '' && isFinite(Number(raw))) ? Number(raw) : null;
+      var act = ap == null ? null : Math.round(it.qty * ap * 100) / 100;
+      estTotal = round2(estTotal + est);
+      if (act != null) { recorded++; actTotal = round2(actTotal + act); estRecorded = round2(estRecorded + est); }
+      lines.push({
+        name: it.name, qty: it.qty, unit: it.unit,
+        estUnitPrice: it.unitPrice, estLine: est,
+        actUnitPrice: ap, actLine: act,
+        variance: act == null ? null : round2(act - est)
+      });
+    });
+    return {
+      lines: lines, recorded: recorded, of: (items || []).length,
+      estTotal: estTotal, actTotal: actTotal,
+      variance: recorded ? round2(actTotal - estRecorded) : null
+    };
+  }
+
+  // Staples in this trade's bank that are missing from the list —
+  // the "forgotten $8 part" check this app exists to prevent.
+  function forgottenStaples(trade, items) {
+    var bank = TRADES[trade] ? TRADES[trade].materials : [];
+    var have = {};
+    (items || []).forEach(function (it) { have[String(it.name).toLowerCase()] = true; });
+    return bank
+      .filter(function (m) { return m.staple && !have[m.name.toLowerCase()]; })
+      .map(function (m) { return { name: m.name, unit: m.unit, unitPrice: m.unitPrice, note: m.note || '' }; });
+  }
+
   ML.TRADES = TRADES;
   ML.tradeKeys = tradeKeys;
   ML.parseQuantities = parseQuantities;
@@ -470,4 +519,7 @@
   ML.remainingCost = remainingCost;
   ML.listToCSV = listToCSV;
   ML.cloneListEntry = cloneListEntry;
+  ML.costPerUnit = costPerUnit;
+  ML.applyActuals = applyActuals;
+  ML.forgottenStaples = forgottenStaples;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

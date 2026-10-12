@@ -91,11 +91,15 @@
             <th>Unit</th>
             <th class="num">Unit price</th>
             <th class="num">Line total</th>
+            <th class="num no-print">Paid $/u</th>
           </tr>
         </thead>
         <tbody id="takeoffBody"></tbody>
       </table>
     </div>
+    <div id="costPerUnit" class="unit-line"></div>
+    <div id="varianceLine" class="unit-line" style="display:none"></div>
+    <div id="staplesBox" class="staples-box no-print" style="display:none"></div>
     <div class="row no-print">
       <label style="flex:1;min-width:200px">Save as
         <input type="text" id="listName" placeholder="e.g. Smith kitchen — cabinets" maxlength="80">

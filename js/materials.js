@@ -507,6 +507,75 @@
       .map(function (m) { return { name: m.name, unit: m.unit, unitPrice: m.unitPrice, note: m.note || '' }; });
   }
 
+  // Estimate totals with an optional discount (%) and sales tax (%).
+  // Discount comes off the subtotal first; tax applies to the discounted amount.
+  function applyTotals(items, taxPct, discountPct) {
+    var subtotal = estimateCost(items).total;
+    var disc = Math.min(100, Math.max(0, Number(discountPct) || 0));
+    var tax = Math.max(0, Number(taxPct) || 0);
+    var discountAmt = round2(subtotal * disc / 100);
+    var taxable = round2(subtotal - discountAmt);
+    var taxAmt = round2(taxable * tax / 100);
+    return {
+      subtotal: subtotal,
+      discountPct: disc,
+      discountAmt: discountAmt,
+      taxPct: tax,
+      taxAmt: taxAmt,
+      grandTotal: round2(taxable + taxAmt)
+    };
+  }
+
+  // Price book: remember actual store prices per material name so future
+  // lists use YOUR prices instead of the built-in estimates.
+  // rememberPrices(book, items, actuals) -> { book, added }
+  function rememberPrices(book, items, actuals) {
+    var b = {};
+    Object.keys(book || {}).forEach(function (k) { b[k] = book[k]; });
+    var added = 0;
+    (items || []).forEach(function (it, i) {
+      var raw = actuals ? actuals[i] : null;
+      var ap = (raw != null && raw !== '' && isFinite(Number(raw))) ? Number(raw) : null;
+      if (ap != null && ap >= 0) {
+        var key = String(it.name).toLowerCase();
+        if (b[key] !== ap) { b[key] = ap; added++; }
+      }
+    });
+    return { book: b, added: added };
+  }
+
+  // Override unit prices from the price book. Tagged lines get bookPrice=true.
+  function applyPriceBook(items, book) {
+    if (!book) return (items || []).slice();
+    return (items || []).map(function (it) {
+      var p = book[String(it.name).toLowerCase()];
+      if (p == null || !isFinite(Number(p)) || Number(p) < 0) return it;
+      var copy = {};
+      Object.keys(it).forEach(function (k) { copy[k] = it[k]; });
+      copy.unitPrice = Number(p);
+      copy.bookPrice = true;
+      return copy;
+    });
+  }
+
+  // Customer-facing quote document data: line items + tax/discount totals,
+  // quote number, dates, business/customer, terms. Ready to render + print.
+  function buildQuote(items, meta) {
+    meta = meta || {};
+    var totals = applyTotals(items, meta.taxPct, meta.discountPct);
+    var stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return {
+      quoteNo: String(meta.quoteNo || ('Q-' + stamp + '-001')).trim() || ('Q-' + stamp + '-001'),
+      date: String(meta.date || new Date().toISOString().slice(0, 10)),
+      business: String(meta.business || 'Your Business').trim() || 'Your Business',
+      customer: String(meta.customer || '').trim(),
+      job: String(meta.job || '').trim(),
+      lines: estimateCost(items).lines,
+      totals: totals,
+      terms: String(meta.terms || 'Quote valid 30 days. Materials pricing subject to availability.')
+    };
+  }
+
   ML.TRADES = TRADES;
   ML.tradeKeys = tradeKeys;
   ML.parseQuantities = parseQuantities;
@@ -522,4 +591,8 @@
   ML.costPerUnit = costPerUnit;
   ML.applyActuals = applyActuals;
   ML.forgottenStaples = forgottenStaples;
+  ML.applyTotals = applyTotals;
+  ML.rememberPrices = rememberPrices;
+  ML.applyPriceBook = applyPriceBook;
+  ML.buildQuote = buildQuote;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

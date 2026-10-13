@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# materiallist-ai e2e tests — 11 flows exercised through the real materials logic in Node.
+# materiallist-ai e2e tests — 16 flows exercised through the real materials logic in Node.
 set -u
 cd "$(dirname "$0")/.."
 
@@ -197,6 +197,40 @@ flow('forgotten-staples flow: missing staples offered and addable', function () 
   assert(missing2.length === missing.length - 1, 'adding a staple clears it from the missing list');
   assert(missing.every(function (s) { return s.unitPrice > 0; }), 'staples carry prices');
   console.log('   (' + missing.length + ' staples flagged, e.g. ' + missing[0].name + ')');
+});
+
+flow('price-book flow: remember actuals once, future lists use your prices', function () {
+  var gen = ML.generateList({ jobText: 'tape and mud 200 sq ft drywall joints', trade: 'drywall' });
+  var items = ML.applyWaste(gen.items, 10);
+  var actuals = items.map(function () { return null; });
+  actuals[0] = Math.round(items[0].unitPrice * 0.9 * 100) / 100; // found it cheaper
+  var rb = ML.rememberPrices({}, items, actuals);
+  assert(rb.added === 1, 'one price remembered');
+  // a fresh list for a similar job picks up the remembered price
+  var gen2 = ML.generateList({ jobText: 'tape and mud 300 sq ft drywall joints', trade: 'drywall' });
+  var items2 = ML.applyPriceBook(ML.applyWaste(gen2.items, 10), rb.book);
+  var same = null;
+  items2.forEach(function (it) {
+    if (it.name === items[0].name) same = it;
+  });
+  assert(same && same.unitPrice === actuals[0] && same.bookPrice === true, 'remembered price applied + tagged');
+  console.log('   (price book: ' + items[0].name + ' @ ' + ML.fmtMoney(actuals[0]) + ')');
+});
+
+flow('totals flow: discount + tax quote math for a customer', function () {
+  var gen = ML.generateList({ jobText: 'Reroof 1200 sq ft house: shingles and underlayment', trade: 'roofing' });
+  var items = ML.applyWaste(gen.items, 10);
+  var t = ML.applyTotals(items, 7.5, 5);
+  var sub = ML.estimateCost(items).total;
+  assert(t.subtotal === sub, 'subtotal = estimate');
+  assert(Math.abs(t.discountAmt - sub * 0.05) < 0.02, 'discount = 5% of subtotal');
+  var taxable = sub - t.discountAmt;
+  assert(Math.abs(t.taxAmt - taxable * 0.075) < 0.02, 'tax on discounted amount');
+  assert(Math.abs(t.grandTotal - (taxable + t.taxAmt)) < 0.02, 'grand total reconciles');
+  var q = ML.buildQuote(items, { business: 'Acme Roofing', customer: 'Smith', taxPct: 7.5, discountPct: 5 });
+  assert(q.totals.grandTotal === t.grandTotal, 'quote uses the same totals');
+  assert(q.lines.length === items.length, 'quote carries every line item');
+  console.log('   (quote grand total: ' + ML.fmtMoney(q.totals.grandTotal) + ')');
 });
 
 if (failures) { console.log('E2E: ' + failures + ' flow(s) FAILED'); process.exit(1); }

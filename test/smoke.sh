@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# materiallist-ai smoke tests — 17 checks. Exit non-zero on first failure.
+# materiallist-ai smoke tests — 26 checks. Exit non-zero on first failure.
 set -u
 cd "$(dirname "$0")/.."
 PASS=0
@@ -206,4 +206,65 @@ check "app.js wires cost/variance/staples + preserves list state on load" sh -c 
   grep -q "current.actuals = entry.actuals" js/app.js &&
   grep -q "current.bought = entry.bought" js/app.js'
 
-echo "SMOKE: $PASS/21 passed"
+check "applyTotals: discount then tax math" node -e "
+  require('./js/materials.js');
+  var ML = globalThis.ML;
+  var items = [{ name: 'A', qty: 10, unit: 'each', unitPrice: 10, note: '' }]; // 100 subtotal
+  var t = ML.applyTotals(items, 8.25, 10);
+  if (t.subtotal !== 100 || t.discountAmt !== 10 || t.taxPct !== 8.25) { console.error(JSON.stringify(t)); process.exit(1); }
+  if (t.taxAmt !== 7.43) { console.error('tax ' + t.taxAmt); process.exit(1); } // 90 * 8.25%
+  if (t.grandTotal !== 97.43) { console.error('grand ' + t.grandTotal); process.exit(1); }
+  var zero = ML.applyTotals(items, 0, 0);
+  if (zero.grandTotal !== 100) { console.error('no tax/disc should equal subtotal'); process.exit(1); }
+  var capped = ML.applyTotals(items, -5, 150);
+  if (capped.discountPct !== 100 || capped.taxPct !== 0 || capped.grandTotal !== 0) { console.error('clamps: ' + JSON.stringify(capped)); process.exit(1); }
+  console.log('applyTotals ok');
+"
+
+check "price book: remember + apply + tagging" node -e "
+  require('./js/materials.js');
+  var ML = globalThis.ML;
+  var items = [
+    { name: 'Wire Nuts', qty: 1, unit: 'pack', unitPrice: 9.99, note: '' },
+    { name: 'Tape', qty: 2, unit: 'each', unitPrice: 3.49, note: '' }
+  ];
+  var r = ML.rememberPrices({}, items, [8.50, null]);
+  if (r.added !== 1 || r.book['wire nuts'] !== 8.50) { console.error(JSON.stringify(r)); process.exit(1); }
+  var r2 = ML.rememberPrices(r.book, items, [8.50, null]);
+  if (r2.added !== 0) { console.error('re-remember should add 0'); process.exit(1); }
+  var applied = ML.applyPriceBook(items, r.book);
+  if (applied[0].unitPrice !== 8.50 || applied[0].bookPrice !== true) { console.error('apply 0'); process.exit(1); }
+  if (applied[1].unitPrice !== 3.49 || applied[1].bookPrice) { console.error('apply 1'); process.exit(1); }
+  if (items[0].unitPrice !== 9.99) { console.error('input mutated'); process.exit(1); }
+  console.log('price book ok');
+"
+
+check "buildQuote: document shape + totals agree with applyTotals" node -e "
+  require('./js/materials.js');
+  var ML = globalThis.ML;
+  var items = [{ name: 'A', qty: 10, unit: 'each', unitPrice: 10, note: '' }];
+  var q = ML.buildQuote(items, { business: 'Acme', customer: 'Jane', taxPct: 8.25, discountPct: 10 });
+  if (!/^Q-\d{8}-001$/.test(q.quoteNo)) { console.error('quoteNo ' + q.quoteNo); process.exit(1); }
+  if (q.business !== 'Acme' || q.customer !== 'Jane') { console.error('meta'); process.exit(1); }
+  if (q.lines.length !== 1 || q.lines[0].lineTotal !== 100) { console.error('lines'); process.exit(1); }
+  var t = ML.applyTotals(items, 8.25, 10);
+  if (q.totals.grandTotal !== t.grandTotal) { console.error('totals mismatch'); process.exit(1); }
+  var custom = ML.buildQuote(items, { quoteNo: 'Q-1', terms: 'Net 15' });
+  if (custom.quoteNo !== 'Q-1' || custom.terms !== 'Net 15') { console.error('custom meta'); process.exit(1); }
+  console.log('buildQuote ok');
+"
+
+check "app.js wires totals/tax-discount inputs, price book, quote sheet" sh -c '
+  grep -q "applyTotals" js/app.js &&
+  grep -q "taxInput" js/app.js && grep -q "discInput" js/app.js &&
+  grep -q "rememberPrices" js/app.js && grep -q "applyPriceBook" js/app.js &&
+  grep -q "book-tag" js/app.js &&
+  grep -q "buildQuote" js/app.js && grep -q "quoteDoc" js/app.js &&
+  grep -q "printing-quote" js/app.js'
+
+check "index.html has tax/discount inputs + quote section ids" sh -c '
+  grep -q "id=\"taxInput\"" index.html && grep -q "id=\"discInput\"" index.html &&
+  grep -q "id=\"quoteBtn\"" index.html && grep -q "id=\"quoteSection\"" index.html &&
+  grep -q "id=\"quoteDoc\"" index.html && grep -q "id=\"qBusiness\"" index.html'
+
+echo "SMOKE: $PASS/26 passed"

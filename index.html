@@ -100,6 +100,15 @@
     <div id="costPerUnit" class="unit-line"></div>
     <div id="varianceLine" class="unit-line" style="display:none"></div>
     <div id="staplesBox" class="staples-box no-print" style="display:none"></div>
+    <div class="row no-print totals-controls">
+      <label class="inline-field">Sales tax %
+        <input type="number" id="taxInput" min="0" max="30" step="0.25" value="8.25" aria-label="Sales tax percent">
+      </label>
+      <label class="inline-field">Discount %
+        <input type="number" id="discInput" min="0" max="100" step="1" value="0" aria-label="Discount percent">
+      </label>
+      <span class="muted small">Tax and discount apply to the estimate totals and the quote sheet.</span>
+    </div>
     <div class="row no-print">
       <label style="flex:1;min-width:200px">Save as
         <input type="text" id="listName" placeholder="e.g. Smith kitchen — cabinets" maxlength="80">
@@ -107,6 +116,7 @@
       <button type="button" id="saveListBtn" class="primary">Save list</button>
       <button type="button" id="csvBtn" class="ghost">Export CSV</button>
       <button type="button" id="printBtn" class="ghost">Print checklist</button>
+      <button type="button" id="quoteBtn" class="ghost">Quote sheet</button>
       <button type="button" id="addItemBtn" class="ghost">＋ Add item</button>
       <span id="saveMsg" class="ok"></span>
     </div>
@@ -119,6 +129,49 @@
       <button type="button" id="cCancel" class="ghost small">Cancel</button>
       <span id="cMsg" class="ok"></span>
     </div>
+  </section>
+
+  <!-- Quote sheet -->
+  <section class="card no-print" id="quoteSection" style="display:none" aria-label="Customer quote">
+    <div class="card-head split">
+      <div>
+        <p class="kicker">Step 2b</p>
+        <h2>Customer quote</h2>
+        <p class="muted">A clean, printable quote built from this list — hand it to the customer.</p>
+      </div>
+      <div class="row" style="margin:0">
+        <button type="button" id="quotePrintBtn" class="primary small">Print quote</button>
+        <button type="button" id="quoteCloseBtn" class="ghost small">Close</button>
+      </div>
+    </div>
+    <div id="quoteForm">
+      <div class="grid">
+        <label>Your business name
+          <input type="text" id="qBusiness" placeholder="e.g. Acme Builders" maxlength="80">
+        </label>
+        <label>Customer name
+          <input type="text" id="qCustomer" placeholder="e.g. Jane Smith" maxlength="80">
+        </label>
+      </div>
+      <div class="grid">
+        <label>Quote no.
+          <input type="text" id="qNo" maxlength="24">
+        </label>
+        <label>Date
+          <input type="date" id="qDate">
+        </label>
+      </div>
+      <label>Job description
+        <input type="text" id="qJob" maxlength="160" placeholder="e.g. Kitchen remodel — cabinets and countertop">
+      </label>
+      <label>Terms
+        <input type="text" id="qTerms" maxlength="200" value="Quote valid 30 days. Materials pricing subject to availability.">
+      </label>
+      <div class="row">
+        <button type="button" id="quoteGenBtn" class="primary">Generate quote</button>
+      </div>
+    </div>
+    <div id="quoteDoc" class="quote-doc" aria-live="polite"></div>
   </section>
 
   <!-- Library -->

@@ -10,6 +10,9 @@
   var LS_LISTS = 'mlai.lists';
   var LS_CURRENT = 'mlai.current';
   var LS_KEY = 'mlai.openai_key';
+  var LS_BOOK = 'mlai.pricebook';
+  var LS_TAX = 'mlai.tax';
+  var LS_DISC = 'mlai.discount';
 
   var SAMPLE_JOBS = {
     carpentry: 'Kitchen remodel: install 6 base cabinets and 4 wall cabinets with butcher block countertop, frame one new 12 ft partition wall',
@@ -25,6 +28,20 @@
 
   var current = null;   // { name, trade, jobText, wastePct, baseItems, items, bought[] }
   var wastePct = 10;
+  var taxPct = 8.25;
+  var discountPct = 0;
+
+  function getBook() { return loadJSON(LS_BOOK, {}); }
+  function getTax() {
+    var t = loadJSON(LS_TAX, null);
+    taxPct = t == null ? 8.25 : Math.max(0, Number(t) || 0);
+    return taxPct;
+  }
+  function getDisc() {
+    var d = loadJSON(LS_DISC, null);
+    discountPct = d == null ? 0 : Math.min(100, Math.max(0, Number(d) || 0));
+    return discountPct;
+  }
 
   function $(id) { return document.getElementById(id); }
 
@@ -79,8 +96,10 @@
   }
 
   // Hand-added items ride alongside the generated takeoff (never waste-adjusted).
+  // The price book overrides unit prices with the user's remembered store prices.
   function mergedItems() {
-    return current ? current.items.concat(current.custom || []) : [];
+    if (!current) return [];
+    return ML.applyPriceBook(current.items.concat(current.custom || []), getBook());
   }
   function mergedBought() {
     if (!current) return [];
@@ -206,6 +225,7 @@
       if (bought[i]) tr.className = 'bought';
       var note = line.note ? '<div class="item-note">' + esc(line.note) + '</div>' : '';
       var av = actuals[i];
+      var bookTag = items[i].bookPrice ? ' <span class="book-tag" title="Your remembered store price">your price</span>' : '';
       tr.innerHTML =
         '<td class="no-print"><input type="checkbox" class="buy-check" data-i="' + i + '"' +
         (bought[i] ? ' checked' : '') + ' aria-label="Bought: ' + esc(line.name) + '"></td>' +
@@ -214,17 +234,29 @@
         '<span class="qty-val">' + line.qty + '</span>' +
         '<button type="button" class="stepper" data-act="inc" data-i="' + i + '" aria-label="Increase quantity">+</button></td>' +
         '<td>' + esc(line.unit) + '</td>' +
-        '<td class="num">' + ML.fmtMoney(line.unitPrice) + '</td>' +
+        '<td class="num">' + ML.fmtMoney(line.unitPrice) + bookTag + '</td>' +
         '<td class="num">' + ML.fmtMoney(line.lineTotal) + '</td>' +
         '<td class="num no-print"><input type="number" class="actual-input" data-i="' + i + '" min="0" step="0.01" ' +
         'placeholder="—" value="' + (av == null ? '' : av) + '" aria-label="Actual unit price paid: ' + esc(line.name) + '"></td>';
       body.appendChild(tr);
     });
-    var trTotal = document.createElement('tr');
-    trTotal.className = 'total-row';
-    trTotal.innerHTML = '<td class="no-print"></td><td>Estimated total</td><td class="num"></td><td></td><td></td>' +
-      '<td class="num">' + ML.fmtMoney(cost.total) + '</td><td class="no-print"></td>';
-    body.appendChild(trTotal);
+    // Totals: subtotal, optional discount + tax, grand total.
+    var totals = ML.applyTotals(items, taxPct, discountPct);
+    function totalRow(label, value, cls) {
+      var tr = document.createElement('tr');
+      tr.className = 'total-row' + (cls ? ' ' + cls : '');
+      tr.innerHTML = '<td class="no-print"></td><td>' + label + '</td><td class="num"></td><td></td><td></td>' +
+        '<td class="num">' + value + '</td><td class="no-print"></td>';
+      body.appendChild(tr);
+    }
+    totalRow('Subtotal', ML.fmtMoney(totals.subtotal));
+    if (totals.discountAmt > 0) {
+      totalRow('Discount (' + totals.discountPct + '%)', '−' + ML.fmtMoney(totals.discountAmt));
+    }
+    if (totals.taxAmt > 0) {
+      totalRow('Sales tax (' + totals.taxPct + '%)', ML.fmtMoney(totals.taxAmt));
+    }
+    totalRow('Estimated total', ML.fmtMoney(totals.grandTotal), 'grand');
     body.querySelectorAll('.actual-input').forEach(function (inp) {
       inp.addEventListener('change', function () {
         var i = parseInt(inp.getAttribute('data-i'), 10);
@@ -251,6 +283,7 @@
   }
 
   // Actual-vs-estimate variance, from the "Paid $/u" column.
+  // Offers to remember the actuals as the user's own price book.
   function renderVariance(items) {
     var box = $('varianceLine');
     var v = ML.applyActuals(items, mergedActuals());
@@ -259,7 +292,21 @@
     var cls = v.variance > 0 ? 'over' : (v.variance < 0 ? 'under' : '');
     box.innerHTML = 'Actuals (' + v.recorded + '/' + v.of + ' lines): paid ' +
       '<strong>' + ML.fmtMoney(v.actTotal) + '</strong> vs est ' + ML.fmtMoney(v.estTotal) +
-      ' — <strong class="' + cls + '">' + (v.variance > 0 ? '+' : '') + ML.fmtMoney(v.variance) + '</strong>';
+      ' — <strong class="' + cls + '">' + (v.variance > 0 ? '+' : '') + ML.fmtMoney(v.variance) + '</strong>' +
+      ' <button type="button" class="ghost small no-print" id="rememberPricesBtn">Remember these prices</button>';
+    var btn = $('rememberPricesBtn');
+    if (btn) {
+      btn.addEventListener('click', function () {
+        var res = ML.rememberPrices(getBook(), mergedItems(), mergedActuals());
+        saveJSON(LS_BOOK, res.book);
+        renderList();
+        var msg = $('genMsg');
+        var note = res.added
+          ? 'Saved ' + res.added + ' price' + (res.added === 1 ? '' : 's') + ' to your price book — future lists use them.'
+          : 'Those prices are already in your price book.';
+        if (msg) { msg.textContent = note; setTimeout(function () { msg.textContent = ''; }, 4000); }
+      });
+    }
   }
 
   // Forgotten staples: trade staples missing from this list, one click to add.
@@ -295,8 +342,11 @@
     var bought = boughtArr.filter(Boolean).length;
     var total = items.length;
     var rc = ML.remainingCost(items, boughtArr);
+    var t = ML.applyTotals(items, taxPct, discountPct);
+    var frac = rc.total > 0 ? rc.remaining / rc.total : 0;
+    var remainingGrand = Math.round(t.grandTotal * frac * 100) / 100;
     $('boughtLabel').textContent = bought + ' of ' + total + ' bought · ' +
-      ML.fmtMoney(rc.remaining) + ' remaining of ' + ML.fmtMoney(rc.total);
+      ML.fmtMoney(remainingGrand) + ' remaining of ' + ML.fmtMoney(t.grandTotal);
     $('boughtBar').style.width = total ? (bought / total * 100) + '%' : '0';
   }
 
@@ -399,6 +449,84 @@
     }
   }
 
+  // ---------- customer quote sheet ----------
+
+  function defaultQuoteNo() {
+    var stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return 'Q-' + stamp + '-001';
+  }
+
+  function showQuoteForm() {
+    if (!current || !mergedItems().length) return;
+    var f = $('quoteForm');
+    f.style.display = f.style.display === 'none' ? '' : 'none';
+    if (f.style.display !== 'none') {
+      if (!$('qNo').value) $('qNo').value = defaultQuoteNo();
+      if (!$('qDate').value) $('qDate').value = new Date().toISOString().slice(0, 10);
+      if (!$('qJob').value) $('qJob').value = current.jobText || '';
+      $('qBusiness').focus();
+    }
+  }
+
+  function renderQuote() {
+    var items = mergedItems();
+    if (!items.length) return;
+    var q = ML.buildQuote(items, {
+      quoteNo: $('qNo').value,
+      date: $('qDate').value,
+      business: $('qBusiness').value,
+      customer: $('qCustomer').value,
+      job: $('qJob').value,
+      terms: $('qTerms').value,
+      taxPct: taxPct,
+      discountPct: discountPct
+    });
+    var t = q.totals;
+    var rows = q.lines.map(function (l) {
+      return '<tr><td>' + esc(l.name) + '</td><td class="num">' + l.qty + '</td>' +
+        '<td>' + esc(l.unit) + '</td><td class="num">' + ML.fmtMoney(l.unitPrice) + '</td>' +
+        '<td class="num">' + ML.fmtMoney(l.lineTotal) + '</td></tr>';
+    }).join('');
+    var totalRows = '<tr><td colspan="4">Subtotal</td><td class="num">' + ML.fmtMoney(t.subtotal) + '</td></tr>';
+    if (t.discountAmt > 0) {
+      totalRows += '<tr><td colspan="4">Discount (' + t.discountPct + '%)</td><td class="num">−' +
+        ML.fmtMoney(t.discountAmt) + '</td></tr>';
+    }
+    if (t.taxAmt > 0) {
+      totalRows += '<tr><td colspan="4">Sales tax (' + t.taxPct + '%)</td><td class="num">' +
+        ML.fmtMoney(t.taxAmt) + '</td></tr>';
+    }
+    totalRows += '<tr class="q-grand"><td colspan="4">Total</td><td class="num">' +
+      ML.fmtMoney(t.grandTotal) + '</td></tr>';
+    $('quoteDoc').innerHTML =
+      '<div class="q-head"><div><div class="q-business">' + esc(q.business) + '</div>' +
+      '<div class="q-title">Materials Quote</div></div>' +
+      '<div class="q-meta"><div><strong>Quote</strong> ' + esc(q.quoteNo) + '</div>' +
+      '<div><strong>Date</strong> ' + esc(q.date) + '</div></div></div>' +
+      (q.customer ? '<div class="q-customer"><strong>Prepared for:</strong> ' + esc(q.customer) + '</div>' : '') +
+      (q.job ? '<div class="q-job"><strong>Job:</strong> ' + esc(q.job) + '</div>' : '') +
+      '<table class="q-table"><thead><tr><th>Item</th><th class="num">Qty</th><th>Unit</th>' +
+      '<th class="num">Unit price</th><th class="num">Line total</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody><tfoot>' + totalRows + '</tfoot></table>' +
+      '<p class="q-terms">' + esc(q.terms) + '</p>' +
+      '<div class="q-sign"><div class="q-sign-line"></div><div class="muted small">Authorized signature · date</div></div>';
+    $('quoteSection').style.display = '';
+    $('quoteSection').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function printQuote() {
+    document.body.classList.add('printing-quote');
+    function done() {
+      document.body.classList.remove('printing-quote');
+      window.removeEventListener('afterprint', done);
+    }
+    window.addEventListener('afterprint', done);
+    setTimeout(function () {
+      window.print();
+      setTimeout(done, 1000); // fallback: some browsers skip afterprint
+    }, 60);
+  }
+
   // ---------- events ----------
 
   function bind() {
@@ -450,6 +578,23 @@
 
     $('saveListBtn').addEventListener('click', saveCurrentList);
     $('printBtn').addEventListener('click', function () { window.print(); });
+    $('quoteBtn').addEventListener('click', showQuoteForm);
+    $('quoteGenBtn').addEventListener('click', renderQuote);
+    $('quotePrintBtn').addEventListener('click', printQuote);
+    $('quoteCloseBtn').addEventListener('click', function () {
+      $('quoteSection').style.display = 'none';
+      $('quoteForm').style.display = 'none';
+    });
+    $('taxInput').addEventListener('change', function () {
+      taxPct = Math.max(0, parseFloat($('taxInput').value) || 0);
+      saveJSON(LS_TAX, taxPct);
+      if (current) renderList();
+    });
+    $('discInput').addEventListener('change', function () {
+      discountPct = Math.min(100, Math.max(0, parseFloat($('discInput').value) || 0));
+      saveJSON(LS_DISC, discountPct);
+      if (current) renderList();
+    });
     $('csvBtn').addEventListener('click', function () {
       if (!current || !mergedItems().length) return;
       downloadFile('materials-list.csv', ML.listToCSV(mergedItems(), mergedBought()), 'text/csv;charset=utf-8');
@@ -511,6 +656,9 @@
     buildTradeSelect();
     buildWasteToggle();
     bind();
+    getTax(); getDisc();
+    $('taxInput').value = taxPct;
+    $('discInput').value = discountPct;
     renderLibrary();
     var saved = loadJSON(LS_CURRENT, null);
     if (saved && saved.items && saved.items.length) {

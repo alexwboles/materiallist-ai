@@ -76,9 +76,14 @@
         <p class="kicker">Step 2</p>
         <h2>Your materials list <span class="muted" id="listTrade"></span></h2>
       </div>
-      <div class="progress-block">
+      <div class="progress-block loadout">
+        <div class="loadout-nums">
+          <div class="loadout-pct"><strong id="loadPct">0%</strong><span>loaded</span></div>
+          <div class="loadout-rem"><strong id="loadRemain">$0</strong><span>still to buy</span></div>
+        </div>
         <div class="progress-label" id="boughtLabel">0 of 0 bought</div>
         <div class="progress tape-measure"><div id="boughtBar"></div></div>
+        <label class="check remain-only"><input type="checkbox" id="hideBought"> Remaining only</label>
       </div>
     </div>
     <div class="table-wrap">

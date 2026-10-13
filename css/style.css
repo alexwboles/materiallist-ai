@@ -309,3 +309,49 @@ tr.total-row.grand td:last-child { color: #fff; }
   body.printing-quote #quoteSection { display: block !important; }
   .quote-doc { border: none; padding: 0; }
 }
+
+/* ---------- redesign: load-out hero ---------- */
+.loadout { min-width: 300px; }
+.loadout-nums { display: flex; gap: 28px; margin-bottom: 8px; }
+.loadout-pct strong, .loadout-rem strong {
+  display: block; font-size: 34px; font-weight: 800; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.loadout-pct strong { color: var(--accent-dark); }
+.loadout-rem strong { color: var(--ink); }
+.loadout-pct span, .loadout-rem span {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+}
+.remain-only { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.remain-only input { width: 17px; height: 17px; accent-color: var(--accent-dark); }
+
+/* ---------- redesign: quote sheet ---------- */
+.q-sheet { background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow); padding: 36px 38px; }
+.q-mast {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+  padding-bottom: 20px; margin-bottom: 20px; border-bottom: 4px solid var(--accent-dark);
+}
+.q-business { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.q-tag { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.q-stamp {
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; font-weight: 800; letter-spacing: 2.5px;
+  color: var(--accent-dark); border: 2px solid var(--accent-dark); padding: 8px 14px; text-align: center;
+  transform: rotate(-2deg); white-space: nowrap;
+}
+.q-stamp span { display: block; font-size: 11px; letter-spacing: 1px; margin-top: 2px; }
+.q-meta2 { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+.q-card { border: 1px solid var(--line); padding: 10px 16px; min-width: 170px; background: #fbfaf6; }
+.q-cap { display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin-bottom: 3px; }
+.q-table th { border-bottom: 2px solid var(--accent-dark); }
+.q-table td, .q-table th { font-variant-numeric: tabular-nums; }
+.q-total-hero {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  background: #20271f; color: #f2f0e8; padding: 14px 18px; margin-top: 14px;
+}
+.q-total-hero span { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .18em; }
+.q-total-hero strong { font-size: 30px; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .q-sheet { padding: 22px 18px; }
+  .loadout-nums { gap: 20px; }
+  .loadout-pct strong, .loadout-rem strong { font-size: 27px; }
+}

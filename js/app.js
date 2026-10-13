@@ -215,12 +215,14 @@
     }
     var bought = mergedBought();
     var actuals = mergedActuals();
+    var hideBought = $('hideBought') && $('hideBought').checked;
     $('listSection').style.display = '';
     $('listTrade').textContent = '· ' + ML.TRADES[current.trade].label + ' · ' + wastePct + '% waste';
     var cost = ML.estimateCost(items);
     var body = $('takeoffBody');
     body.innerHTML = '';
     cost.lines.forEach(function (line, i) {
+      if (hideBought && bought[i]) return; // supply-house run: remaining only
       var tr = document.createElement('tr');
       if (bought[i]) tr.className = 'bought';
       var note = line.note ? '<div class="item-note">' + esc(line.note) + '</div>' : '';
@@ -345,9 +347,12 @@
     var t = ML.applyTotals(items, taxPct, discountPct);
     var frac = rc.total > 0 ? rc.remaining / rc.total : 0;
     var remainingGrand = Math.round(t.grandTotal * frac * 100) / 100;
+    var pct = total ? Math.round(bought / total * 100) : 0;
     $('boughtLabel').textContent = bought + ' of ' + total + ' bought · ' +
       ML.fmtMoney(remainingGrand) + ' remaining of ' + ML.fmtMoney(t.grandTotal);
-    $('boughtBar').style.width = total ? (bought / total * 100) + '%' : '0';
+    $('loadPct').textContent = pct + '%';
+    $('loadRemain').textContent = ML.fmtMoney(remainingGrand);
+    $('boughtBar').style.width = pct + '%';
   }
 
   // ---------- library ----------
@@ -499,17 +504,22 @@
     totalRows += '<tr class="q-grand"><td colspan="4">Total</td><td class="num">' +
       ML.fmtMoney(t.grandTotal) + '</td></tr>';
     $('quoteDoc').innerHTML =
-      '<div class="q-head"><div><div class="q-business">' + esc(q.business) + '</div>' +
-      '<div class="q-title">Materials Quote</div></div>' +
-      '<div class="q-meta"><div><strong>Quote</strong> ' + esc(q.quoteNo) + '</div>' +
-      '<div><strong>Date</strong> ' + esc(q.date) + '</div></div></div>' +
-      (q.customer ? '<div class="q-customer"><strong>Prepared for:</strong> ' + esc(q.customer) + '</div>' : '') +
-      (q.job ? '<div class="q-job"><strong>Job:</strong> ' + esc(q.job) + '</div>' : '') +
+      '<div class="q-sheet">' +
+      '<div class="q-mast"><div><div class="q-business">' + esc(q.business) + '</div>' +
+      '<div class="q-tag">Materials quote · good faith estimate</div></div>' +
+      '<div class="q-stamp">MATERIALS QUOTE<span>' + esc(q.quoteNo) + '</span></div></div>' +
+      '<div class="q-meta2">' +
+      (q.customer ? '<div class="q-card"><span class="q-cap">Prepared for</span><strong>' + esc(q.customer) + '</strong></div>' : '') +
+      (q.job ? '<div class="q-card"><span class="q-cap">Job</span><strong>' + esc(q.job) + '</strong></div>' : '') +
+      '<div class="q-card"><span class="q-cap">Date</span><strong>' + esc(q.date) + '</strong></div>' +
+      '</div>' +
       '<table class="q-table"><thead><tr><th>Item</th><th class="num">Qty</th><th>Unit</th>' +
       '<th class="num">Unit price</th><th class="num">Line total</th></tr></thead>' +
       '<tbody>' + rows + '</tbody><tfoot>' + totalRows + '</tfoot></table>' +
+      '<div class="q-total-hero"><span>Quote total</span><strong>' + ML.fmtMoney(t.grandTotal) + '</strong></div>' +
       '<p class="q-terms">' + esc(q.terms) + '</p>' +
-      '<div class="q-sign"><div class="q-sign-line"></div><div class="muted small">Authorized signature · date</div></div>';
+      '<div class="q-sign"><div class="q-sign-line"></div><div class="muted small">Authorized signature · date</div></div>' +
+      '</div>';
     $('quoteSection').style.display = '';
     $('quoteSection').scrollIntoView({ behavior: 'smooth' });
   }
@@ -530,6 +540,8 @@
   // ---------- events ----------
 
   function bind() {
+    var hb = $('hideBought');
+    if (hb) hb.addEventListener('change', function () { renderList(); });
     $('generateBtn').addEventListener('click', function () {
       var text = $('jobText').value.trim();
       if (!text) {

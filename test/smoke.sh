@@ -267,4 +267,10 @@ check "index.html has tax/discount inputs + quote section ids" sh -c '
   grep -q "id=\"quoteBtn\"" index.html && grep -q "id=\"quoteSection\"" index.html &&
   grep -q "id=\"quoteDoc\"" index.html && grep -q "id=\"qBusiness\"" index.html'
 
-echo "SMOKE: $PASS/26 passed"
+check "redesign: loadout hero + remaining-only + quote sheet wired" sh -c '
+  grep -q "id=\"hideBought\"" index.html && grep -q "id=\"loadPct\"" index.html &&
+  grep -q "id=\"loadRemain\"" index.html && grep -q "hideBought" js/app.js &&
+  grep -q "q-sheet" js/app.js && grep -q "q-total-hero" js/app.js &&
+  grep -q "q-stamp" js/app.js && grep -q "loadout-nums" css/style.css'
+
+echo "SMOKE: $PASS/27 passed"

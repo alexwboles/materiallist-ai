@@ -386,7 +386,7 @@
   }
 
   function saveCurrentList() {
-    if (!current || !current.items.length) return;
+    if (!current || !(current.items || []).length) return;
     var name = $('listName').value.trim();
     if (!name) {
       $('saveMsg').textContent = 'Give the list a name first.';
@@ -463,9 +463,12 @@
 
   function showQuoteForm() {
     if (!current || !mergedItems().length) return;
-    var f = $('quoteForm');
-    f.style.display = f.style.display === 'none' ? '' : 'none';
-    if (f.style.display !== 'none') {
+    var sec = $('quoteSection'), f = $('quoteForm');
+    // First click must reveal the whole quote section; the form then toggles on later clicks.
+    var hidden = sec.style.display === 'none' || f.style.display === 'none';
+    sec.style.display = '';
+    f.style.display = hidden ? '' : 'none';
+    if (hidden) {
       if (!$('qNo').value) $('qNo').value = defaultQuoteNo();
       if (!$('qDate').value) $('qDate').value = new Date().toISOString().slice(0, 10);
       if (!$('qJob').value) $('qJob').value = current.jobText || '';
@@ -645,10 +648,18 @@
 
     $('saveKeyBtn').addEventListener('click', function () {
       var k = $('openaiKey').value.trim();
-      try {
-        if (k) localStorage.setItem(LS_KEY, k); else localStorage.removeItem(LS_KEY);
-      } catch (e) {}
-      $('keyMsg').textContent = k ? 'Key saved in this browser only.' : 'No key entered.';
+      // Empty field + Save must never wipe or replace the stored key —
+      // the field is intentionally never prefilled (see boot), so only
+      // explicit text here counts as "a new key".
+      if (!k) {
+        $('keyMsg').textContent = 'Paste a key first, or use Remove key to delete the stored one.';
+        setTimeout(function () { $('keyMsg').textContent = ''; }, 3000);
+        return;
+      }
+      try { localStorage.setItem(LS_KEY, k); } catch (e) {}
+      $('openaiKey').value = '';
+      $('openaiKey').placeholder = 'Key saved ✓ — paste a new one to replace it';
+      $('keyMsg').textContent = 'Key saved in this browser only.';
       setTimeout(function () { $('keyMsg').textContent = ''; }, 3000);
     });
     $('clearKeyBtn').addEventListener('click', function () {
@@ -658,7 +669,12 @@
       setTimeout(function () { $('keyMsg').textContent = ''; }, 3000);
     });
     try {
-      if (localStorage.getItem(LS_KEY)) $('openaiKey').value = '••••••••';
+      // Never prefill the stored key into the field: a masked value like
+      // '••••••••' would be saved back as the key on the next Save click
+      // and clobber the real one. Hint via placeholder instead.
+      if (localStorage.getItem(LS_KEY)) {
+        $('openaiKey').placeholder = 'Key saved ✓ — paste a new one to replace it';
+      }
     } catch (e) {}
   }
 
